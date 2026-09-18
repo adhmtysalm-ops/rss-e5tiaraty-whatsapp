@@ -142,7 +142,7 @@ def whapi_send(endpoint, payload, stage)
 end
 
 def article_caption(item)
-  "*#{item[:title]}*\n\nاقرا المقال من هنا: #{item[:link]}\nPowered by e5tiaraty.com"
+  "*#{item[:title]}*\n\nاقرا المقال من هنا: #{item[:link]}\n\nPowered by e5tiaraty.com"
 end
 
 # WhatsApp channels/newsletters do NOT support interactive buttons,
