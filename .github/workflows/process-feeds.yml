@@ -1,0 +1,68 @@
+name: Process feeds
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '*/30 * * * *'
+
+jobs:
+  process:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Check for required secrets
+        run: |
+          if [ -z "${{ secrets.WHATSAPP_API_TOKEN }}" ]; then
+            echo "Error: WHATSAPP_API_TOKEN secret is not set"
+            exit 1
+          fi
+          if [ -z "${{ secrets.WHATSAPP_CHANNEL }}" ]; then
+            echo "Error: WHATSAPP_CHANNEL secret is not set"
+            exit 1
+          fi
+          echo "All required secrets are present"
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check for feeds.json
+        run: |
+          if [ ! -f feeds.json ]; then
+            echo "Error: feeds.json file is not present"
+            exit 1
+          fi
+          echo "feeds.json found"
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.2'
+          bundler-cache: true
+
+      - name: Process feeds
+        env:
+          WHATSAPP_API_TOKEN: ${{ secrets.WHATSAPP_API_TOKEN }}
+          WHATSAPP_CHANNEL: ${{ secrets.WHATSAPP_CHANNEL }}
+        run: ruby process_feeds.rb
+
+      - name: Check for changes
+        id: check-changes
+        run: |
+          if git diff --quiet feeds.json; then
+            echo "changed=false" >> $GITHUB_OUTPUT
+          else
+            echo "changed=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Save changes to feeds.json
+        if: steps.check-changes.outputs.changed == 'true'
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add feeds.json
+          git commit -m "Update feeds.json with processed items"
+          git push
