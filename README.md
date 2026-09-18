@@ -22,8 +22,11 @@ You will need:
 
 By default, the processor will run on-demand and every 30 minutes, but you can modify that in `.github/workflows/process-feeds.yml`.
 
-It’s configured to send the single oldest un-sent item in any of the RSS feeds it’s subscribed to, on each run (it tracks which ones it’s sent already by their guids, in a `"seen": [...]` array in `feeds.json`):
-sending a single link per run ensures that WhatsApp’s link previews work as expected. At that rate, you could theoretically run it once every 10 minutes and never hit the 150-messages-per-day limit of Whapi’s free tier),
+It’s configured to send the single oldest un-sent item in any of the RSS feeds it’s subscribed to, on each run (it tracks which ones it’s sent already by their guids, in a `"seen": [...]` array in `feeds.json`).
+
+Each message is sent as a **WhatsApp interactive message**: the article's cover image (`og:image`) as the header, the title as the body, and a "اضغط هنا لقراءة المقال" button that links straight to the article. If the image or the buttons aren't available (e.g. on channels/newsletters that don't support buttons), it gracefully falls back to a plain image-with-caption message, and finally to a plain text message.
+
+Sending a single link per run ensures that WhatsApp’s link previews work as expected. At that rate, you could theoretically run it once every 10 minutes and never hit the 150-messages-per-day limit of Whapi’s free tier),
 but you’ll want to work out your own optimal rate based on the anticipated update frequency of your feeds and the number of RSS-to-WhatsApp channels you’re running.
 
 ### Getting your channel ID

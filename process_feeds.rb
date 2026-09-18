@@ -14,7 +14,9 @@ unless ENV['WHATSAPP_API_TOKEN'] && ENV['WHATSAPP_CHANNEL']
   warn "Error: WHATSAPP_API_TOKEN and WHATSAPP_CHANNEL environment variables must be set"
   exit 1
 end
-ENDPOINT = URI('https://gate.whapi.cloud/messages/text') # Whapi.Cloud "send text message" endpoint
+ENDPOINT_INTERACTIVE = URI('https://gate.whapi.cloud/messages/interactive') # Whapi.Cloud "send message with buttons" endpoint
+ENDPOINT_IMAGE       = URI('https://gate.whapi.cloud/messages/image')       # Whapi.Cloud "send image message" endpoint
+ENDPOINT_TEXT        = URI('https://gate.whapi.cloud/messages/text')        # Whapi.Cloud "send text message" endpoint
 
 # Load feeds from JSON file
 def load_feeds
@@ -94,33 +96,94 @@ rescue StandardError => e
 end
 
 # Send item to WhatsApp via Whapi.cloud API
-def send_item_to_whatsapp(item)
-  body = "*#{item[:title]}*\n#{item[:link]}"
-  puts "Sending item to WhatsApp:\n#{body}"
-
-  # Send the request to the Whapi.cloud API
-  http = Net::HTTP.new(ENDPOINT.host, ENDPOINT.port)
+def whapi_post(endpoint, payload)
+  http = Net::HTTP.new(endpoint.host, endpoint.port)
   http.use_ssl = true
 
-  request = Net::HTTP::Post.new(ENDPOINT)
+  request = Net::HTTP::Post.new(endpoint)
   request['Accept'] = 'application/json'
   request['Content-Type'] = 'application/json'
   request['Authorization'] = "Bearer #{ENV['WHATSAPP_API_TOKEN']}"
 
-  request.body = JSON.generate({
-    to: ENV['WHATSAPP_CHANNEL'],
-    body: body
-  })
+  request.body = JSON.generate(payload)
 
   response = http.request(request)
 
-  unless response.code.to_i >= 200 && response.code.to_i < 300
-    warn "Error: Received HTTP #{response.code}"
-    warn "Response body: #{response.body}"
-    exit 1
+  [response.code.to_i, response]
+end
+
+# Fetch the og:image from the article page (used as the message header image)
+def get_image_from_url(link)
+  uri = URI(link)
+  response = Net::HTTP.get_response(uri)
+  return nil unless response.is_a?(Net::HTTPSuccess)
+
+  doc = Nokogiri::HTML(response.body)
+  meta = doc.at('meta[property="og:image"]')
+  meta && meta['content']
+rescue StandardError
+  nil
+end
+
+def warn_failure(code, response, stage)
+  warn "Error: Received HTTP #{code} while sending #{stage}"
+  warn "Response body: #{response.body}"
+end
+
+def send_item_to_whatsapp(item)
+  image_url = get_image_from_url(item[:link])
+  button_title = 'اضغط هنا لقراءة المقال'
+
+  # 1) Try the interactive message: article image + title + URL button
+  interactive_payload = {
+    to: ENV['WHATSAPP_CHANNEL'],
+    type: 'button',
+    body: { text: "*#{item[:title]}*\n\nاشترك في قناة #اختياري" },
+    footer: { text: 'Powered by e5tiaraty.com' },
+    action: {
+      buttons: [
+        { type: 'url', title: button_title, id: 'read_article', url: item[:link] }
+      ]
+    }
+  }
+  interactive_payload[:media] = image_url if image_url
+
+  puts 'Sending interactive button message to WhatsApp'
+  code, response = whapi_post(ENDPOINT_INTERACTIVE, interactive_payload)
+  if code >= 200 && code < 300
+    puts 'Success!'
+    return
+  end
+  warn_failure(code, response, 'interactive message')
+
+  # 2) Fallback: image message with the title as caption
+  if image_url
+    caption = "*#{item[:title]}*\n\nاشترك في قناة #اختياري\n\n#{item[:link]}"
+    puts 'Falling back to image message'
+    code, response = whapi_post(ENDPOINT_IMAGE, {
+                                  to: ENV['WHATSAPP_CHANNEL'],
+                                  media: image_url,
+                                  caption: caption
+                                })
+    if code >= 200 && code < 300
+      puts 'Success!'
+      return
+    end
+    warn_failure(code, response, 'image message')
   end
 
-  puts "Success!"
+  # 3) Final fallback: plain text message
+  puts 'Falling back to text message'
+  code, response = whapi_post(ENDPOINT_TEXT, {
+                                to: ENV['WHATSAPP_CHANNEL'],
+                                body: "*#{item[:title]}*\n#{item[:link]}"
+                              })
+  if code >= 200 && code < 300
+    puts 'Success!'
+    return
+  end
+  warn_failure(code, response, 'text message')
+  exit 1
 end
 
 # Main program
