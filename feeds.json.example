@@ -1,10 +1,6 @@
 [
   {
-    "name": "BBC News",
-    "url": "https://bbc-feeds.danq.dev/full-sports.xml"
-  },
-  {
-    "name": "Dan Q",
-    "url": "https://danq.me/feed/",
+    "name": "e5tiaraty",
+    "url": "https://www.e5tiaraty.com/rss.xml"
   }
 ]
