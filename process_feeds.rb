@@ -130,11 +130,43 @@ def warn_failure(code, response, stage)
   warn "Response body: #{response.body}"
 end
 
-def send_item_to_whatsapp(item)
-  image_url = get_image_from_url(item[:link])
+def whapi_send(endpoint, payload, stage)
+  code, response = whapi_post(endpoint, payload)
+  if code >= 200 && code < 300
+    puts 'Success!'
+    true
+  else
+    warn_failure(code, response, stage)
+    false
+  end
+end
+
+def article_caption(item)
+  "*#{item[:title]}*\n\nاشترك في قناة #اختياري\n\n#{item[:link]}"
+end
+
+# WhatsApp channels/newsletters do NOT support interactive buttons,
+# so for those targets we send the image with a caption instead.
+def send_newsletter_message(item, image_url)
+  if image_url
+    puts 'Sending image message to newsletter'
+    return true if whapi_send(ENDPOINT_IMAGE, {
+                                to: ENV['WHATSAPP_CHANNEL'],
+                                media: image_url,
+                                caption: article_caption(item)
+                              }, 'image message')
+  end
+
+  puts 'Sending text message to newsletter'
+  whapi_send(ENDPOINT_TEXT, {
+               to: ENV['WHATSAPP_CHANNEL'],
+               body: "*#{item[:title]}*\n#{item[:link]}"
+             }, 'text message')
+end
+
+def send_interactive_message(item, image_url)
   button_title = 'اضغط هنا لقراءة المقال'
 
-  # 1) Try the interactive message: article image + title + URL button
   interactive_payload = {
     to: ENV['WHATSAPP_CHANNEL'],
     type: 'button',
@@ -149,41 +181,36 @@ def send_item_to_whatsapp(item)
   interactive_payload[:media] = image_url if image_url
 
   puts 'Sending interactive button message to WhatsApp'
-  code, response = whapi_post(ENDPOINT_INTERACTIVE, interactive_payload)
-  if code >= 200 && code < 300
-    puts 'Success!'
-    return
-  end
-  warn_failure(code, response, 'interactive message')
+  return true if whapi_send(ENDPOINT_INTERACTIVE, interactive_payload, 'interactive message')
 
-  # 2) Fallback: image message with the title as caption
   if image_url
-    caption = "*#{item[:title]}*\n\nاشترك في قناة #اختياري\n\n#{item[:link]}"
     puts 'Falling back to image message'
-    code, response = whapi_post(ENDPOINT_IMAGE, {
-                                  to: ENV['WHATSAPP_CHANNEL'],
-                                  media: image_url,
-                                  caption: caption
-                                })
-    if code >= 200 && code < 300
-      puts 'Success!'
-      return
-    end
-    warn_failure(code, response, 'image message')
+    return true if whapi_send(ENDPOINT_IMAGE, {
+                                to: ENV['WHATSAPP_CHANNEL'],
+                                media: image_url,
+                                caption: article_caption(item)
+                              }, 'image message')
   end
 
-  # 3) Final fallback: plain text message
   puts 'Falling back to text message'
-  code, response = whapi_post(ENDPOINT_TEXT, {
-                                to: ENV['WHATSAPP_CHANNEL'],
-                                body: "*#{item[:title]}*\n#{item[:link]}"
-                              })
-  if code >= 200 && code < 300
-    puts 'Success!'
-    return
+  whapi_send(ENDPOINT_TEXT, {
+               to: ENV['WHATSAPP_CHANNEL'],
+               body: "*#{item[:title]}*\n#{item[:link]}"
+             }, 'text message')
+end
+
+def send_item_to_whatsapp(item)
+  image_url = get_image_from_url(item[:link])
+  channel = ENV['WHATSAPP_CHANNEL'].to_s
+  is_newsletter = channel.end_with?('@newsletter')
+
+  puts "Channel type: #{is_newsletter ? 'newsletter (no buttons)' : 'group/chat'}: #{channel}"
+
+  if is_newsletter
+    send_newsletter_message(item, image_url)
+  else
+    send_interactive_message(item, image_url)
   end
-  warn_failure(code, response, 'text message')
-  exit 1
 end
 
 # Main program
@@ -211,7 +238,8 @@ end
 oldest_item = all_items.min_by { |item| item[:pub_date] }
 
 # Print the oldest item
-send_item_to_whatsapp(oldest_item)
+sent = send_item_to_whatsapp(oldest_item)
+exit 1 unless sent
 
 # Update feeds.json to mark this item as seen
 feeds.each do |feed|
