@@ -2,8 +2,6 @@ name: Process feeds
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: '*/30 * * * *'
 
 jobs:
   process:

@@ -20,7 +20,18 @@ You will need:
 3. Make a `feeds.json` file (a feeds.json.example is provided as a guide) containing the URLs of the RSS feeds you’d like to subscribe to.
 4. Do a test run: from the Actions tab select the “Process feeds” action and click “Run workflow”. If it finishes successfully (and you get the WhatsApp message), you’re done! If it fails, click on the failed action and drill-in to the failed task to see the error message and correct accordingly.
 
-By default, the processor will run on-demand and every 30 minutes, but you can modify that in `.github/workflows/process-feeds.yml`.
+By default the workflow is triggered only **manually** (`workflow_dispatch`, from the Actions tab). Scheduling is left to an external cron service (e.g. [cron-job.org](https://console.cron-job.org/dashboard)), which is far more reliable than GitHub's own `schedule` cron. cron-job.org just needs to call the GitHub API to trigger the workflow:
+
+- **Job URL:** `POST https://api.github.com/repos/{owner}/{repo}/actions/workflows/process-feeds.yml/dispatches`
+- **Method:** `POST`
+- **Headers:**
+  - `Authorization: Bearer <PAT>`
+  - `Accept: application/vnd.github+json`
+  - `X-GitHub-Api-Version: 2022-11-28`
+  - `Content-Type: application/json`
+- **Body:** `{"ref":"main"}`
+
+The `<PAT>` is a GitHub Personal Access Token (classic, with the `repo` and `workflow` scopes; or fine-grained with `Actions: write` access to this repo). Store it as a *secret* in cron-job.org so it never appears in its request logs. Then set your preferred schedule (e.g. every 30 minutes).
 
 It’s configured to send the single oldest un-sent item in any of the RSS feeds it’s subscribed to, on each run (it tracks which ones it’s sent already by their guids, in a `"seen": [...]` array in `feeds.json`).
 
