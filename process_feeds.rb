@@ -142,7 +142,7 @@ def whapi_send(endpoint, payload, stage)
 end
 
 def article_caption(item)
-  "*#{item[:title]}*\n\nاشترك في قناة #اختياري\n\n#{item[:link]}"
+  "*#{item[:title]}*\n\nاقرا المقال من هنا: #{item[:link]}\nPowered by e5tiaraty.com"
 end
 
 # WhatsApp channels/newsletters do NOT support interactive buttons,
@@ -160,21 +160,19 @@ def send_newsletter_message(item, image_url)
   puts 'Sending text message to newsletter'
   whapi_send(ENDPOINT_TEXT, {
                to: ENV['WHATSAPP_CHANNEL'],
-               body: "*#{item[:title]}*\n#{item[:link]}"
+               body: article_caption(item)
              }, 'text message')
 end
 
 def send_interactive_message(item, image_url)
-  button_title = 'اضغط هنا لقراءة المقال'
-
   interactive_payload = {
     to: ENV['WHATSAPP_CHANNEL'],
     type: 'button',
-    body: { text: "*#{item[:title]}*\n\nاشترك في قناة #اختياري" },
+    body: { text: "*#{item[:title]}*" },
     footer: { text: 'Powered by e5tiaraty.com' },
     action: {
       buttons: [
-        { type: 'url', title: button_title, id: 'read_article', url: item[:link] }
+        { type: 'url', title: 'اقرا المقال من هنا', id: 'read_article', url: item[:link] }
       ]
     }
   }
@@ -195,7 +193,7 @@ def send_interactive_message(item, image_url)
   puts 'Falling back to text message'
   whapi_send(ENDPOINT_TEXT, {
                to: ENV['WHATSAPP_CHANNEL'],
-               body: "*#{item[:title]}*\n#{item[:link]}"
+               body: article_caption(item)
              }, 'text message')
 end
 
