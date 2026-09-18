@@ -1,0 +1,10 @@
+[
+  {
+    "name": "BBC News",
+    "url": "https://bbc-feeds.danq.dev/full-sports.xml"
+  },
+  {
+    "name": "Dan Q",
+    "url": "https://danq.me/feed/",
+  }
+]
